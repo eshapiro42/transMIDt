@@ -1,0 +1,12 @@
+[Unit]
+Description = transMIDt server
+After=network.target
+
+[Service]
+User=pi
+WorkingDirectory=/home/pi/transMIDt/server
+ExecStart=/home/pi/transMIDt/server/venv/bin/python server.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
