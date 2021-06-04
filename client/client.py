@@ -6,8 +6,9 @@ import mido.backends.rtmidi
 import psutil
 import rtmidi
 import time
+import volume
 from redis import Redis
-from threading import Thread
+from threading import Event, Thread
 from queue import Queue
 
 
@@ -20,6 +21,7 @@ class Listener(Thread):
         self.pubsub = self.redis.pubsub()
         self.pubsub.subscribe("connection")
         self.pubsub.subscribe("midi")
+        self.volume_manager = VolumeManager()
         self.worker_threads = []
 
     def register_worker(self, thread):
@@ -37,6 +39,8 @@ class Listener(Thread):
 
     def run(self):
         self.started = True
+        self.volume_manager.daemon = True
+        self.volume_manager.start()
         for worker in self.worker_threads:
             worker.daemon = True
             worker.start()
@@ -59,8 +63,8 @@ class Worker(Thread):
             except AttributeError:
                 continue
             if channel == 'midi':
-                    data = json.loads(data)
-                    midi(data)
+                data = json.loads(data)
+                midi(data)
             elif channel == 'connection':
                 if data == 'reconnect':
                     reconnect()
@@ -68,10 +72,37 @@ class Worker(Thread):
                     disconnect()
 
 
+class VolumeManager(Thread):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.volume_start = Event()
+        self.volume_stop = Event()
+
+    def run(self):
+        while True:
+            self.volume_start.wait()
+            start = time.time()
+            self.volume_stop.wait()
+            stop = time.time()
+            # A short press means volume up
+            if stop - start < 0.5:
+                volume.volume_up()
+            # A long press means volume down
+            else:
+                volume.volume_down()
+            self.volume_start.clear()
+            self.volume_stop.clear()
+
+
 def midi(data):
     try:
         msg = mido.Message.from_dict(data)
         out_port.send(msg)
+        if msg.type == 'control_change' and msg.control == 66 and msg.channel == 2:
+            if msg.value == 127:
+                listener.volume_manager.volume_start.set()
+            elif msg.value == 0:
+                listener.volume_manager.volume_stop.set()
     except TypeError:
         pass
 
