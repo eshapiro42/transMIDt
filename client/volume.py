@@ -13,8 +13,11 @@ def get_current_volume():
     return volume.GetMasterVolumeLevel()
 
 def volume_up(decibels=1.5):
-    current_volume = get_current_volume()
-    volume.SetMasterVolumeLevel(current_volume + decibels, None)
+    try:
+        current_volume = get_current_volume()
+        volume.SetMasterVolumeLevel(current_volume + decibels, None)
+    except:
+        pass
 
 def volume_down(decibels=1.5):
     volume_up(-decibels)
